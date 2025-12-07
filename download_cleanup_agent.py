@@ -6,6 +6,7 @@ Scans the Downloads folder and uses GPT-4o-mini to suggest files for deletion.
 
 import os
 import json
+import subprocess
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Any
@@ -111,9 +112,7 @@ Return your response as a JSON object with this structure:
   }
 }
 
-Be conservative - only suggest deletion if you're reasonably confident the file is safe to remove.
-
-Note: The numbers in the example JSON structure above are just examples. You should analyze ALL files and suggest deletion for ALL files that meet the criteria, not limit yourself to any specific number."""
+Be conservative - only suggest deletion if you're reasonably confident the file is safe to remove."""
 
     user_prompt = f"""I have {file_count} items in my Downloads folder, totaling {total_size_mb:.2f} MB.
 
@@ -242,14 +241,27 @@ def mark_files_as_keep(suggestions: Dict[str, Any], downloads_path: Path) -> Lis
     return selected or []
 
 
+def open_file_with_default_app(file_path: Path) -> None:
+    """Open a file with the default application on macOS."""
+    try:
+        subprocess.run(["open", str(file_path)], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Error opening file: {e}")
+    except Exception as e:
+        print(f"Error opening file: {e}")
+
+
 def interactive_file_selection(suggestions: Dict[str, Any], downloads_path: Path) -> List[str]:
-    """Display suggestions with checkboxes and return selected filenames."""
+    """Display suggestions with checkboxes and return selected filenames.
+    After selection, users can open files before confirming deletion."""
     suggestion_list = suggestions.get("suggestions", [])
     if not suggestion_list:
         return []
     
     # Create checkbox options with file details
     choices = []
+    file_paths = {}  # Map filename to full path for opening
+    
     for item in suggestion_list:
         confidence_emoji = {
             "high": "🔴",
@@ -262,20 +274,57 @@ def interactive_file_selection(suggestions: Dict[str, Any], downloads_path: Path
         if len(reason) > 60:
             reason = reason[:57] + "..."
         
+        filename = item['filename']
+        file_path = downloads_path / filename
+        file_paths[filename] = file_path
+        
         label = (
-            f"{confidence_emoji} {item['filename']} "
+            f"{confidence_emoji} {filename} "
             f"({item.get('size_mb', 0):.2f} MB) - {reason}"
         )
         choices.append(questionary.Choice(
             title=label,
-            value=item['filename']
+            value=filename
         ))
     
-    selected = questionary.checkbox(
-        "Select files to delete (use space to toggle, enter to confirm):",
-        choices=choices,
-        instruction="(Press <space> to select, <↑↓> to navigate, <enter> to confirm)"
-    ).ask()
+    while True:
+        selected = questionary.checkbox(
+            "Select files to delete (use space to toggle, enter to confirm):",
+            choices=choices,
+            instruction="(Press <space> to select, <↑↓> to navigate, <enter> to confirm)"
+        ).ask()
+        
+        if not selected:
+            return []
+        
+        # Offer to open selected files
+        print("\n" + "="*70)
+        open_choice = questionary.select(
+            f"You've selected {len(selected)} file(s). What would you like to do?",
+            choices=[
+                questionary.Choice("✅ Confirm selection and proceed", value="confirm"),
+                questionary.Choice("📂 Open selected files to review", value="open"),
+                questionary.Choice("↩️  Go back and modify selection", value="back")
+            ]
+        ).ask()
+        
+        if open_choice == "confirm":
+            return selected
+        elif open_choice == "open":
+            print("\n🔍 Opening selected files...")
+            for filename in selected:
+                file_path = file_paths.get(filename)
+                if file_path and file_path.exists():
+                    print(f"   Opening: {filename}")
+                    open_file_with_default_app(file_path)
+                else:
+                    print(f"   ⚠️  File not found: {filename}")
+            print("\nPress Enter to continue...")
+            input()
+            # After opening, ask again
+            continue
+        elif open_choice == "back":
+            continue  # Loop back to checkbox selection
     
     return selected or []
 
