@@ -8,6 +8,8 @@ An AI-powered tool that scans your macOS Downloads folder and suggests which fil
 - 🤖 Uses GPT-4o-mini to intelligently analyze files and suggest deletions
 - 📊 Provides detailed suggestions with confidence levels and reasoning
 - 💾 Saves suggestions to a JSON file for review
+- 📌 Remembers files marked as "keep" - files you want to keep won't be suggested again in future runs
+- 👀 Option to view/open files before deleting to verify they're safe to remove
 - ⚠️ Conservative approach - only suggests files that are likely safe to delete
 
 ## Setup
@@ -56,9 +58,12 @@ deactivate
 
 The script will:
 1. Scan your Downloads folder
-2. Send file metadata to GPT-4o-mini for analysis
-3. Display suggestions organized by confidence level
-4. Save suggestions to `Downloads/cleanup_suggestions.json`
+2. Filter out files previously marked as "keep"
+3. Send file metadata to GPT-4o-mini for analysis
+4. Display suggestions organized by confidence level
+5. Allow you to select files for deletion and optionally open them for review
+6. Save suggestions to `Downloads/cleanup_suggestions.json`
+7. Optionally mark files as "keep" so they won't be suggested again
 
 ## How It Works
 
